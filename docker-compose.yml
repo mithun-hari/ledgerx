@@ -1,0 +1,31 @@
+version: "3.9"
+
+networks:
+  ledgerx-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ledgerx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ledgerx
+      POSTGRES_USER: ledgerx_user
+      POSTGRES_PASSWORD: ledgerx_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ledgerx-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerx_user -d ledgerx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
