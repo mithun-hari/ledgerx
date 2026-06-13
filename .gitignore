@@ -1,0 +1,28 @@
+# Environment variables — never commit secrets
+.env
+
+# Java build output
+**/target/
+**/.mvn/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.venv/
+
+# Node / Next.js
+**/node_modules/
+**/.next/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# Docker volumes
+**/docker-data/
+
+# OS files
+.DS_Store
+Thumbs.db
