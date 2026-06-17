@@ -12,6 +12,9 @@ public class TransferResponse {
     private String status;
     private BigDecimal amount;
     private String currency;
+    private BigDecimal convertedAmount;    // ← new
+    private String receiverCurrency;       // ← new
+    private BigDecimal fxRate;             // ← new
     private UUID senderWalletId;
     private UUID receiverWalletId;
 }

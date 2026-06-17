@@ -1,11 +1,10 @@
-version: "3.9"
-
 networks:
   ledgerx-net:
     driver: bridge
 
 volumes:
   postgres-data:
+  redis-data:
 
 services:
 
@@ -26,6 +25,23 @@ services:
       - ledgerx-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ledgerx_user -d ledgerx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ledgerx-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass redis_pass
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ledgerx-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_pass", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

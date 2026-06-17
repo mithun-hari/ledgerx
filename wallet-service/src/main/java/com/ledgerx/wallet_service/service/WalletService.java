@@ -1,5 +1,6 @@
 package com.ledgerx.wallet_service.service;
 
+import com.ledgerx.wallet_service.config.FxServiceClient;
 import com.ledgerx.wallet_service.dto.*;
 import com.ledgerx.wallet_service.entity.*;
 import com.ledgerx.wallet_service.repository.*;
@@ -7,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -18,6 +20,7 @@ public class WalletService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final FxServiceClient fxServiceClient;
 
     // ── Create a new wallet ───────────────────────────────────────────────────
     public WalletResponse createWallet(UUID userId, CreateWalletRequest request) {
@@ -66,6 +69,10 @@ public class WalletService {
                     .build();
         }
 
+        // Prevent self-transfer
+        if (request.getSenderWalletId().equals(request.getReceiverWalletId())) {
+            throw new RuntimeException("Cannot transfer to the same wallet");
+        }
         // 2. Load both wallets
         Wallet sender = walletRepository.findById(request.getSenderWalletId())
                 .orElseThrow(() -> new RuntimeException("Sender wallet not found"));
@@ -96,9 +103,20 @@ public class WalletService {
 
         Transaction savedTx = transactionRepository.save(transaction);
 
-        // 6. Calculate new balances
+        // 6. Fetch FX rate if currencies differ
+        BigDecimal fxRate = fxServiceClient.getExchangeRate(
+                sender.getCurrency(),
+                receiver.getCurrency()
+        );
+
+        // 7. Calculate converted amount for receiver
+        BigDecimal convertedAmount = request.getAmount()
+                .multiply(fxRate)
+                .setScale(8, java.math.RoundingMode.HALF_UP);
+
+        // 8. Calculate new balances
         var newSenderBalance   = sender.getBalance().subtract(request.getAmount());
-        var newReceiverBalance = receiver.getBalance().add(request.getAmount());
+        var newReceiverBalance = receiver.getBalance().add(convertedAmount);
 
         // 7. Write DEBIT ledger entry for sender
         ledgerEntryRepository.save(LedgerEntry.builder()
@@ -115,7 +133,7 @@ public class WalletService {
                 .walletId(receiver.getId())
                 .transactionId(savedTx.getId())
                 .entryType("CREDIT")
-                .amount(request.getAmount())
+                .amount(convertedAmount)
                 .currency(receiver.getCurrency())
                 .runningBalance(newReceiverBalance)
                 .build());
@@ -135,6 +153,9 @@ public class WalletService {
                 .status("COMPLETED")
                 .amount(request.getAmount())
                 .currency(sender.getCurrency())
+                .convertedAmount(convertedAmount)
+                .receiverCurrency(receiver.getCurrency())
+                .fxRate(fxRate)
                 .senderWalletId(sender.getId())
                 .receiverWalletId(receiver.getId())
                 .build();
